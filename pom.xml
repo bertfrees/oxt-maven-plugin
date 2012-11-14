@@ -51,16 +51,4 @@
 			<version>2.0</version>
 		</dependency>
 	</dependencies>
-	<distributionManagement>
-		<repository>
-			<id>sonatype-nexus-staging</id>
-			<name>oss.sonatype.org Staging Repository</name>
-			<url>http://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
-		</repository>
-		<snapshotRepository>
-			<id>sonatype-nexus-snapshots</id>
-			<name>oss.sonatype.org github Release Repository Snapshot Repository</name>
-			<url>http://oss.sonatype.org/content/repositories/snapshots/</url>
-		</snapshotRepository>
-	</distributionManagement>
 </project>
