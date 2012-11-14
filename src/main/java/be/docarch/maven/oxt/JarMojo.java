@@ -122,9 +122,10 @@ public class JarMojo extends AbstractMojo {
 					element(name("manifestSections"),
 						element(name("manifestSection"),
 							element(name("name"),
-								centralRegistrationClass.replaceAll("\\.", "/") + ".class"),
+								centralRegistrationClass.trim().replaceAll("\\.", "/") + ".class"),
 							element(name("manifestEntries"),
-								element(name("RegistrationClasses"), registrationClasses)))))),
+								element(name("RegistrationClasses"),
+									registrationClasses.trim().replaceAll("\\s+", " "))))))),
 			executionEnvironment(
 				project,
 				session,
