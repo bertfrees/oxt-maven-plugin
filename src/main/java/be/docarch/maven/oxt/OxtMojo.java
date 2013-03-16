@@ -184,6 +184,6 @@ public class OxtMojo extends AbstractMojo {
 				project.getArtifact().setFile(zipFile); }
 		
 		catch (Exception e) {
-			throw new MojoExecutionException( "Error assembling OXT", e ); }
+			throw new MojoExecutionException("Error assembling OXT", e); }
 	}
 }

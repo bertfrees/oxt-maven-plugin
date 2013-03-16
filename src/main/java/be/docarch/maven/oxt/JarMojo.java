@@ -1,8 +1,8 @@
 package be.docarch.maven.oxt;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
+
+import org.apache.commons.lang.StringUtils;
 
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
@@ -10,7 +10,10 @@ import org.apache.maven.plugin.BuildPluginManager;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.project.MavenProject;
 
-import static org.twdata.maven.mojoexecutor.MojoExecutor.Element;
+import org.codehaus.plexus.configuration.xml.XmlPlexusConfiguration;
+import org.codehaus.plexus.util.DirectoryScanner;
+import org.codehaus.plexus.util.xml.Xpp3Dom;
+
 import static org.twdata.maven.mojoexecutor.MojoExecutor.executeMojo;
 import static org.twdata.maven.mojoexecutor.MojoExecutor.executionEnvironment;
 import static org.twdata.maven.mojoexecutor.MojoExecutor.artifactId;
@@ -18,26 +21,47 @@ import static org.twdata.maven.mojoexecutor.MojoExecutor.configuration;
 import static org.twdata.maven.mojoexecutor.MojoExecutor.element;
 import static org.twdata.maven.mojoexecutor.MojoExecutor.goal;
 import static org.twdata.maven.mojoexecutor.MojoExecutor.groupId;
-import static org.twdata.maven.mojoexecutor.MojoExecutor.name;
 import static org.twdata.maven.mojoexecutor.MojoExecutor.plugin;
 import static org.twdata.maven.mojoexecutor.MojoExecutor.version;
+import static org.twdata.maven.mojoexecutor.PlexusConfigurationUtils.toXpp3Dom;
 
 /**
- * Create Manifest, build JAR and copy dependencies for OpenOffice extension.
+ * Create Manifest and build JAR for OpenOffice extension.
  *
  * @goal jar
  * @phase package
- * @requiresDependencyResolution runtime
  */
 public class JarMojo extends AbstractMojo {
 	
 	/**
-	 * Directory where the dependencies are copied.
+	 * Directory containing the generated JAR.
 	 *
 	 * @parameter expression="${project.build.directory}/oxt"
 	 * @required
 	 */
 	private File outputDirectory;
+	
+	/**
+	 * Name of the generated JAR.
+	 *
+	 * @parameter expression="${project.build.finalName}"
+	 * @required
+	 */
+	private String finalName;
+	
+	/**
+	 * List of files to include.
+	 *
+	 * @parameter
+	 */
+	protected XmlPlexusConfiguration includes;
+	
+	/**
+	 * List of files to exclude.
+	 *
+	 * @parameter
+	 */
+	protected XmlPlexusConfiguration excludes;
 	
 	/**
 	 * Name of the central registration class.
@@ -56,6 +80,14 @@ public class JarMojo extends AbstractMojo {
 	private String registrationClasses;
 	
 	/**
+	 * Comma separated list of files to include in the ClassPath.
+	 * Specified as fileset patterns which are relative to outputDirectory.
+	 *
+	 * @parameter
+	 */
+	private String classPath = "";
+	
+	/**
 	 * The project currently being build.
 	 *
 	 * @parameter expression="${project}"
@@ -63,7 +95,7 @@ public class JarMojo extends AbstractMojo {
 	 * @readonly
 	 */
 	private MavenProject project;
-
+	
 	/**
 	 * The current Maven session.
 	 *
@@ -71,8 +103,8 @@ public class JarMojo extends AbstractMojo {
 	 * @required
 	 * @readonly
 	 */
-    private MavenSession session;
-
+	private MavenSession session;
+	
 	/**
 	 * The Maven BuildPluginManager component.
 	 *
@@ -83,54 +115,50 @@ public class JarMojo extends AbstractMojo {
 
 	public void execute() throws MojoExecutionException {
 		
-		File libDirectory = new File(outputDirectory, "lib");
-		
-		if (!libDirectory.exists()) {
+		try {
+			DirectoryScanner scanner = new DirectoryScanner();
+			scanner.setBasedir(outputDirectory.getAbsolutePath());
+			scanner.setIncludes(StringUtils.split(classPath, ','));
+			scanner.scan();
+			
+			Xpp3Dom configuration = configuration(
+				element("outputDirectory", outputDirectory.getAbsolutePath()),
+				element("finalName", finalName),
+				element("archive",
+					element("manifestEntries",
+						element("Implementation-Title", "${project.artifactId}"),
+						element("Implementation-Version", "${project.version}"),
+						element("UNO-Type-Path", ""),
+						element("RegistrationClassName", centralRegistrationClass),
+						element("Class-Path", StringUtils.join(scanner.getIncludedFiles(), ' '))),
+					element("manifestSections",
+						element("manifestSection",
+							element("name",
+								centralRegistrationClass.trim().replaceAll("\\.", "/") + ".class"),
+							element("manifestEntries",
+								element("RegistrationClasses",
+									registrationClasses.trim().replaceAll("\\s+", " ")))))));
+			
+			if (includes != null)
+				configuration.addChild(toXpp3Dom(includes));
+			if (excludes != null)
+				configuration.addChild(toXpp3Dom(excludes));
+			
 			executeMojo(
 				plugin(
 					groupId("org.apache.maven.plugins"),
-					artifactId("maven-dependency-plugin"),
-					version("2.5")),
-				goal("copy-dependencies"),
-				configuration(
-					element(name("outputDirectory"), libDirectory.getAbsolutePath()),
-					element(name("includeScope"), "runtime")),
+					artifactId("maven-jar-plugin"),
+					version("2.4")),
+				goal("jar"),
+				configuration,
 				executionEnvironment(
 					project,
 					session,
-					pluginManager)); }
+					pluginManager));
+			
+			project.getArtifact().setFile(null); }
 		
-		String classpath = "";
-		for (String file : libDirectory.list())
-			classpath += "lib/" + file + " ";
-		
-		executeMojo(
-			plugin(
-				groupId("org.apache.maven.plugins"),
-				artifactId("maven-jar-plugin"),
-				version("2.4")),
-			goal("jar"),
-			configuration(
-				element(name("outputDirectory"), outputDirectory.getAbsolutePath()),
-				element(name("archive"),
-					element(name("manifestEntries"),
-						element(name("Implementation-Title"), "${project.artifactId}"),
-						element(name("Implementation-Version"), "${project.version}"),
-						element(name("UNO-Type-Path"), ""),
-						element(name("RegistrationClassName"), centralRegistrationClass),
-						element(name("Class-Path"), classpath)),
-					element(name("manifestSections"),
-						element(name("manifestSection"),
-							element(name("name"),
-								centralRegistrationClass.trim().replaceAll("\\.", "/") + ".class"),
-							element(name("manifestEntries"),
-								element(name("RegistrationClasses"),
-									registrationClasses.trim().replaceAll("\\s+", " "))))))),
-			executionEnvironment(
-				project,
-				session,
-				pluginManager));
-				
-		project.getArtifact().setFile(null);
+		catch (Exception e) {
+			throw new MojoExecutionException("Error generating JAR", e); }
 	}
 }
