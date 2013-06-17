@@ -33,6 +33,8 @@ import static org.twdata.maven.mojoexecutor.PlexusConfigurationUtils.toXpp3Dom;
  */
 public class JarMojo extends AbstractMojo {
 	
+	private static final String centralRegistrationClass = "be.docarch.maven.oxt.CentralRegistration";
+	
 	/**
 	 * Directory containing the generated JAR.
 	 *
@@ -62,14 +64,6 @@ public class JarMojo extends AbstractMojo {
 	 * @parameter
 	 */
 	protected XmlPlexusConfiguration excludes;
-	
-	/**
-	 * Name of the central registration class.
-	 *
-	 * @parameter
-	 * @required
-	 */
-	private String centralRegistrationClass;
 	
 	/**
 	 * Space separated list of registration classes.
@@ -112,14 +106,18 @@ public class JarMojo extends AbstractMojo {
 	 * @required
 	 */
 	private BuildPluginManager pluginManager;
-
+	
 	public void execute() throws MojoExecutionException {
 		
 		try {
-			DirectoryScanner scanner = new DirectoryScanner();
-			scanner.setBasedir(outputDirectory.getAbsolutePath());
-			scanner.setIncludes(StringUtils.split(classPath, ','));
-			scanner.scan();
+			
+			String[] classPathFiles = StringUtils.split(classPath, ':');
+			if (classPath.contains("*")) {
+				DirectoryScanner scanner = new DirectoryScanner();
+				scanner.setBasedir(outputDirectory.getAbsolutePath());
+				scanner.setIncludes(classPathFiles);
+				scanner.scan();
+				classPathFiles = scanner.getIncludedFiles(); }
 			
 			Xpp3Dom configuration = configuration(
 				element("outputDirectory", outputDirectory.getAbsolutePath()),
@@ -130,11 +128,11 @@ public class JarMojo extends AbstractMojo {
 						element("Implementation-Version", "${project.version}"),
 						element("UNO-Type-Path", ""),
 						element("RegistrationClassName", centralRegistrationClass),
-						element("Class-Path", StringUtils.join(scanner.getIncludedFiles(), ' '))),
+						element("Class-Path", StringUtils.join(classPathFiles, " "))),
 					element("manifestSections",
 						element("manifestSection",
 							element("name",
-								centralRegistrationClass.trim().replaceAll("\\.", "/") + ".class"),
+								centralRegistrationClass.replaceAll("\\.", "/") + ".class"),
 							element("manifestEntries",
 								element("RegistrationClasses",
 									registrationClasses.trim().replaceAll("\\s+", " ")))))));
